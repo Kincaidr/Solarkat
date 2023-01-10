@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-# ian.heywood@physics.ox.ac.uk
 
 import numpy as np
 import logging
@@ -69,19 +68,22 @@ def sun_coordinates(ms,outfile):
            f.writelines('\n')
  
 def shift_to_sun(ms,sun_coords,splitted_ms_dir):
+    sun_coordinates=[]
     maintab = table(ms,ack=False)
     scans = list(numpy.unique(maintab.getcol('SCAN_NUMBER')))
+    with open(sun_coords) as f:
+        lines = f.readlines()
+    for line in lines:
+        sun_coordinates.append(line)
+        
     for scan in scans:
-      splitted_ms=splitted_ms_dir+ ms.replace(".ms","_scan"+str(scan)+".ms")
-      with open(sun_coords) as f:
-          lines = f.readlines()
-          for line in lines:
-            os.system(f"chgcentre {splitted_ms} {line}")
-            print('scan'+str(scan)+ ' Done')
-            print(UVW_new,'Old UVW are:')
-            UVW_new=maintab.getcol('UVW')
-            print(UVW_new,'New UVW are:')
-            UVW_old=maintab.getcol('UVW_backup')
+        splitted_ms=splitted_ms_dir+ ms.replace(".ms","_scan"+str(scan)+".ms")    
+        os.system(f"chgcentre {splitted_ms} {sun_coordinates[scan]}")
+        print('scan'+str(scan)+ ' Done')
+        UVW_new=maintab.getcol('UVW')
+        UVW_old=maintab.getcol('UVW_backup')
+        print('New UVW are:',UVW_new)
+        print('Old UVW are:',UVW_old)
 
 
 def perscan_timerange_intervals(interval,scan_list):
@@ -112,8 +114,54 @@ def perscan_timerange_intervals(interval,scan_list):
         else:
             print()
     timeranges=timerange_array
-    print(timerange_array)
-            
-  
-            
+    print(timeranges)
+    
+    return timeranges
+
    
+    
+def scan_numbers(ms):
+    from casacore.tables import table
+    import numpy
+    scans=[]
+    maintab = table(ms,ack=False)
+    scan_no = list(numpy.unique(maintab.getcol('SCAN_NUMBER')))
+    for scan in scan_no:
+        scans.append(str(scan))
+    print(scans)
+    
+    
+    
+    
+def pertime_sun_coordinates(ms):
+    from astropy.coordinates import solar_system_ephemeris, EarthLocation, AltAz
+    from astropy.coordinates import get_body_barycentric, get_body, get_moon
+    from pyrap.tables import table
+    import numpy
+    from astropy.time import Time
+    from astropy.coordinates import SkyCoord
+    from astropy import units as u
+
+    def format_coords(ra0,dec0):
+        c = SkyCoord(ra0*u.deg,dec0*u.deg,frame='fk5')
+        hms = str(c.ra.to_string(u.hour))
+        dms = str(c.dec)
+        return hms,dms
+
+    # MeerKAT
+    obs_lat = -30.71323598930457
+    obs_lon = 21.443001467965008
+    loc = EarthLocation.from_geodetic(obs_lat,obs_lon) #,obs_height,ellipsoid)
+    maintab = table(ms,ack=False)
+    scans = list(numpy.unique(maintab.getcol('SCAN_NUMBER')))
+    lines=[]
+    t_scan = numpy.mean(maintab.getcol('TIME'))
+    t = Time(t_scan/86400.0,format='mjd')
+    with solar_system_ephemeris.set('builtin'):
+        sun = get_body('Sun', t, loc)
+        sun_ra = sun.ra.value
+    sun_dec = sun.dec.value
+    sun_hms=format_coords(sun_ra,sun_dec)
+    sun_coordinates=str(sun_hms)
+    print(sun_coordinates)
+    return sun_coordinates
